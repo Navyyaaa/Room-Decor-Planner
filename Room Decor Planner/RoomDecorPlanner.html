@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Room Decor Planner with 3D</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+    #app {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+    #sidebar {
+      width: 240px;
+      background: #2c3e50;
+      color: white;
+      overflow-y: auto;
+      border-right: 1px solid #ccc;
+      padding: 10px;
+      z-index: 10;
+    }
+    #toolbar {
+      background: #34495e;
+      padding: 10px;
+      display: flex;
+      gap: 10px;
+      color: white;
+    }
+    #canvas-container {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    #canvas, #three-container {
+      flex-grow: 1;
+      position: relative;
+      background: #fff;
+    }
+    #canvas {
+      background-size: 20px 20px;
+      background-image: linear-gradient(to right, #eee 1px, transparent 1px),
+                        linear-gradient(to bottom, #eee 1px, transparent 1px);
+    }
+    .furniture {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      background-color: #87ceeb;
+      color: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-size: 12px;
+      border: 1px solid #444;
+      cursor: move;
+    }
+    .wall {
+      position: absolute;
+      background: #333;
+    }
+    .toolbar-btn {
+      padding: 5px 10px;
+      cursor: pointer;
+      background: #2980b9;
+      border: none;
+      color: white;
+      border-radius: 4px;
+    }
+    .category {
+      margin-bottom: 20px;
+    }
+    .furn-item {
+      background: #34495e;
+      padding: 5px;
+      cursor: grab;
+      margin-bottom: 5px;
+      text-align: center;
+      color: white;
+    }
+    select {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="sidebar">
+      <label for="room-type"><strong>Room Type</strong></label>
+      <select id="room-type"></select>
+      <div id="furniture-list" class="category"></div>
+    </div>
+    <div id="canvas-container">
+      <div id="toolbar">
+        <button class="toolbar-btn" onclick="toggleWallMode()">Wall Mode</button>
+        <button class="toolbar-btn" onclick="clearCanvas()">Clear</button>
+        <button class="toolbar-btn" onclick="saveDesign()">Save</button>
+        <button class="toolbar-btn" onclick="loadDesign()">Load</button>
+        <button class="toolbar-btn" onclick="exportToImage()">Export</button>
+        <button class="toolbar-btn" onclick="toggle3D()">3D View</button>
+      </div>
+      <div id="canvas"></div>
+      <div id="three-container" style="display:none;"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const threeContainer = document.getElementById('three-container');
+    const toolbar = document.getElementById('toolbar');
+    const roomTypes = ["All", "Balcony", "Car Parking", "Living Room", "Dining Room", "Kitchen", "BathRoom", "Toilet", "Office", "Storage", "Child Room", "Wardrobe", "Lobby", "Bedroom"];
+
+    const furnitureOptions = [
+      { type: 'Sofa', room: 'Living Room' }, 
+{ type: 'TV', room: 'Living Room' },
+      { type: 'Chair', room: 'Dining Room' },
+ { type: 'Table', room: 'Dining Room' },
+      { type: 'Bed', room: 'Bedroom' }, 
+{ type: 'Cabinet', room: 'Kitchen' },
+      { type: 'Set', room: 'Kitchen' }, 
+{ type: 'Appliance', room: 'Kitchen' },
+      { type: 'Kitchenware', room: 'Kitchen' },
+ { type: 'Small Appliance', room: 'Kitchen' },
+      { type: 'Bar', room: 'Kitchen' },
+ { type: 'Island', room: 'Kitchen' },
+      { type: 'Double Bed', room: 'Bedroom' },
+ { type: 'Single Bed', room: 'Bedroom' },
+      { type: 'Dresser', room: 'Bedroom' },
+ { type: 'Stand', room: 'Bedroom' },
+      { type: 'Mirror', room: 'Bedroom' },
+ { type: 'Wardrobe', room: 'Bedroom' },
+      { type: 'Lamp', room: 'Bedroom' }, 
+{ type: 'Children Bed', room: 'Child Room' },
+      { type: 'Bunk Bed', room: 'Child Room' }, 
+{ type: 'Toys', room: 'Child Room' },
+      { type: 'Kids Storage', room: 'Child Room' }, 
+{ type: 'Baby Bed', room: 'Child Room' },
+      { type: 'Desk', room: 'Office' }, 
+{ type: 'Office Table', room: 'Office' },
+      { type: 'Office Chair', room: 'Office' },
+ { type: 'Office Set', room: 'Office' },
+      { type: 'Plants', room: 'Balcony' }, 
+{ type: 'Car', room: 'Car Parking' },
+      { type: 'Brushes', room: 'Car Parking' },
+ { type: 'Water Pipe', room: 'Car Parking' },
+      { type: 'Brushes', room: 'Toilet' }, 
+{ type: 'Tissues', room: 'Toilet' },
+      { type: 'WashBasin', room: 'Toilet' },
+ { type: 'Mirror', room: 'Toilet' },
+      { type: 'Rice', room: 'Storage' }, 
+{ type: 'OldChairs', room: 'Storage' },
+      { type: 'Clothes', room: 'Wardrobe' }, 
+{ type: 'Accessories', room: 'Wardrobe' },
+      { type: 'Rugs', room: 'Lobby' }, 
+{ type: 'Sofas', room: 'Lobby' },
+{ type: 'Toilet', room: 'BathRoom' },
+    { type: 'Wash Basin', room: 'BathRoom' },
+    { type: 'Bath', room: 'BathRoom' },
+    { type: 'Shower', room: 'BathRoom' },
+    { type: 'Cabinet', room: 'BathRoom' },
+    { type: 'Shelving', room: 'BathRoom' },
+    { type: 'Accessory', room: 'BathRoom' },
+
+    ];
+
+    let draggingElement = null;
+    let wallMode = false;
+    let startWall = null;
+
+    // Populate room types
+    const roomSelect = document.getElementById('room-type');
+    roomTypes.forEach(r => {
+      const option = document.createElement('option');
+      option.value = r;
+      option.textContent = r;
+      roomSelect.appendChild(option);
+    });
+
+    roomSelect.addEventListener('change', updateFurnitureList);
+    updateFurnitureList();
+
+    function updateFurnitureList() {
+      const selectedRoom = roomSelect.value;
+      const list = document.getElementById('furniture-list');
+      list.innerHTML = '';
+      furnitureOptions
+        .filter(f => selectedRoom === 'All' || f.room === selectedRoom)
+        .forEach(f => {
+          const div = document.createElement('div');
+          div.className = 'furn-item';
+          div.textContent = f.type;
+          div.draggable = true;
+          div.dataset.type = f.type;
+          div.addEventListener('dragstart', () => {
+            draggingElement = { type: f.type };
+          });
+          list.appendChild(div);
+        });
+    }
+
+    canvas.addEventListener('dragover', e => e.preventDefault());
+    canvas.addEventListener('drop', e => {
+      if (draggingElement) {
+        const x = e.offsetX;
+        const y = e.offsetY;
+        const div = document.createElement('div');
+        div.className = 'furniture';
+        div.style.left = x + 'px';
+        div.style.top = y + 'px';
+        div.textContent = draggingElement.type;
+        div.title = draggingElement.type;
+        enableDrag(div);
+        canvas.appendChild(div);
+        draggingElement = null;
+      }
+    });
+
+    function enableDrag(el) {
+      let offsetX, offsetY;
+      el.onmousedown = e => {
+        offsetX = e.offsetX;
+        offsetY = e.offsetY;
+        document.onmousemove = e2 => {
+          el.style.left = (e2.pageX - offsetX) + 'px';
+          el.style.top = (e2.pageY - offsetY - toolbar.offsetHeight) + 'px';
+        };
+        document.onmouseup = () => document.onmousemove = null;
+      };
+    }
+
+    function toggleWallMode() {
+      wallMode = !wallMode;
+      alert('Wall mode: ' + (wallMode ? 'ON' : 'OFF'));
+    }
+
+    canvas.addEventListener('mousedown', e => {
+      if (!wallMode) return;
+      startWall = { x: e.offsetX, y: e.offsetY };
+    });
+
+    canvas.addEventListener('mouseup', e => {
+      if (!wallMode || !startWall) return;
+      const endX = e.offsetX;
+      const endY = e.offsetY;
+      const length = Math.hypot(endX - startWall.x, endY - startWall.y);
+      const angle = Math.atan2(endY - startWall.y, endX - startWall.x);
+      const wall = document.createElement('div');
+      wall.className = 'wall';
+      wall.style.width = length + 'px';
+      wall.style.height = '4px';
+      wall.style.left = startWall.x + 'px';
+      wall.style.top = startWall.y + 'px';
+      wall.style.transform = `rotate(${angle}rad)`;
+      canvas.appendChild(wall);
+      startWall = null;
+    });
+
+    function clearCanvas() {
+      if (confirm('Clear all items?')) canvas.innerHTML = '';
+    }
+
+    function saveDesign() {
+      localStorage.setItem('designHTML', canvas.innerHTML);
+      alert('Design saved!');
+    }
+
+    function loadDesign() {
+      const saved = localStorage.getItem('designHTML');
+      if (saved) {
+        canvas.innerHTML = saved;
+        canvas.querySelectorAll('.furniture').forEach(enableDrag);
+        alert('Design loaded!');
+      } else {
+        alert('No saved design found.');
+      }
+    }
+
+    function exportToImage() {
+      html2canvas(canvas).then(canvasEl => {
+        const link = document.createElement('a');
+        link.download = 'design.png';
+        link.href = canvasEl.toDataURL();
+        link.click();
+      });
+    }
+
+    function toggle3D() {
+      if (threeContainer.style.display === 'none') {
+        canvas.style.display = 'none';
+        threeContainer.style.display = 'block';
+        render3DScene();
+      } else {
+        threeContainer.style.display = 'none';
+        canvas.style.display = 'block';
+        threeContainer.innerHTML = '';
+      }
+    }
+
+    function render3DScene() {
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(75, threeContainer.clientWidth / threeContainer.clientHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer();
+      renderer.setSize(threeContainer.clientWidth, threeContainer.clientHeight);
+      threeContainer.appendChild(renderer.domElement);
+
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(10, 10, 10).normalize();
+      scene.add(light);
+
+      const furniture = canvas.querySelectorAll('.furniture');
+      furniture.forEach(el => {
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const material = new THREE.MeshLambertMaterial({ color: 0x87ceeb });
+        const cube = new THREE.Mesh(geometry, material);
+        cube.position.x = parseInt(el.style.left) / 50;
+        cube.position.z = parseInt(el.style.top) / 50;
+        cube.position.y = 0.5;
+        scene.add(cube);
+      });
+
+      camera.position.set(10, 10, 10);
+      camera.lookAt(0, 0, 0);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+      }
+      animate();
+    }
+  </script>
+</body>
+</html>
